@@ -1,10 +1,10 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useAuth } from '../contexts/AuthContext';
-import { RootStackParamList } from '../types/navigation';
+import { NavigationContainer } from '@react-navigation/native'; // Container principal de navegação
+import { createNativeStackNavigator } from '@react-navigation/native-stack'; // Stack Navigator nativo
+import { useAuth } from '../contexts/AuthContext'; // Hook de autenticação
+import { RootStackParamList } from '../types/navigation'; // Tipagem das rotas
 
-// Screens
+// Importação das telas (screens) da aplicação
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -17,31 +17,33 @@ import PatientDashboardScreen from '../screens/PatientDashboardScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
+// Criação do Stack Navigator tipado
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const AppNavigator: React.FC = () => {
-  const { user, loading } = useAuth();
+  const { user, loading } = useAuth(); // Obtém usuário autenticado e estado de carregamento
 
   if (loading) {
-    return null; // Ou um componente de loading
+    return null; // Enquanto carrega, não renderiza nada (pode ser trocado por componente de loading)
   }
 
   return (
     <NavigationContainer>
       <Stack.Navigator
         screenOptions={{
-          headerShown: false,
+          headerShown: false, // Remove o header padrão
         }}
       >
         {!user ? (
-          // Rotas públicas
+          // Se não houver usuário logado → rotas públicas
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
           </>
         ) : (
-          // Rotas protegidas
+          // Se houver usuário logado → rotas protegidas
           <>
+            {/* Rotas específicas por tipo de usuário */}
             {user.role === 'admin' && (
               <Stack.Screen 
                 name="AdminDashboard" 
@@ -102,4 +104,4 @@ export const AppNavigator: React.FC = () => {
       </Stack.Navigator>
     </NavigationContainer>
   );
-}; 
+};
