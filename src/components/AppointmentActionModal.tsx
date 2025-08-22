@@ -1,225 +1,265 @@
-import React from 'react';
-import styled from 'styled-components/native';
-import { Modal, ViewStyle } from 'react-native';
-import { Button, Input } from 'react-native-elements';
-import theme from '../styles/theme';
+import React, { useState } from 'react'; // Importa React e hook useState
+import styled from 'styled-components/native'; // Importa styled-components para estilização
+import { ScrollView, ViewStyle, TextStyle } from 'react-native'; // Importa componentes e tipos do React Native
+import { Button, ListItem, Text } from 'react-native-elements'; // Importa componentes da biblioteca react-native-elements
+import { useAuth } from '../contexts/AuthContext'; // Importa hook de autenticação customizado
+import { useNavigation } from '@react-navigation/native'; // Hook para navegação
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'; // Tipo para stack navigation
+import { useFocusEffect } from '@react-navigation/native'; // Hook que dispara efeito quando a tela ganha foco
+import { RootStackParamList } from '../types/navigation'; // Tipos de navegação do app
+import theme from '../styles/theme'; // Importa tema com cores e espaçamentos
+import Header from '../components/Header'; // Importa componente Header customizado
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Para persistência local
 
-interface AppointmentActionModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onConfirm: (reason?: string) => void;
-  actionType: 'confirm' | 'cancel';
-  appointmentDetails: {
-    patientName: string;
-    doctorName: string;
-    date: string;
-    time: string;
-    specialty: string;
-  };
+// Define tipos para a prop de navegação da tela
+type PatientDashboardScreenProps = {
+  navigation: NativeStackNavigationProp<RootStackParamList, 'PatientDashboard'>;
+};
+
+// Interface que define a estrutura de uma consulta
+interface Appointment {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  date: string;
+  time: string;
+  specialty: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
 }
 
-const AppointmentActionModal: React.FC<AppointmentActionModalProps> = ({
-  visible,
-  onClose,
-  onConfirm,
-  actionType,
-  appointmentDetails,
-}) => {
-  const [reason, setReason] = React.useState('');
+// Interface para props de estilização do status
+interface StyledProps {
+  status: string;
+}
 
-  const handleConfirm = () => {
-    onConfirm(reason.trim() || undefined);
-    setReason('');
-    onClose();
+// Função para obter a cor do status
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'confirmed':
+      return theme.colors.success; // Verde para confirmadas
+    case 'cancelled':
+      return theme.colors.error; // Vermelho para canceladas
+    default:
+      return theme.colors.warning; // Amarelo para pendentes
+  }
+};
+
+// Função para obter o texto do status
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'confirmed':
+      return 'Confirmada';
+    case 'cancelled':
+      return 'Cancelada';
+    default:
+      return 'Pendente';
+  }
+};
+
+const PatientDashboardScreen: React.FC = () => {
+  const { user, signOut } = useAuth(); // Pega usuário logado e função de logout
+  const navigation = useNavigation<PatientDashboardScreenProps['navigation']>(); // Hook de navegação
+  const [appointments, setAppointments] = useState<Appointment[]>([]); // Estado das consultas
+  const [loading, setLoading] = useState(true); // Estado de carregamento
+
+  // Função para carregar consultas do AsyncStorage
+  const loadAppointments = async () => {
+    try {
+      const storedAppointments = await AsyncStorage.getItem('@MedicalApp:appointments'); // Busca dados salvos
+      if (storedAppointments) {
+        const allAppointments: Appointment[] = JSON.parse(storedAppointments); // Converte de JSON
+        const userAppointments = allAppointments.filter(
+          (appointment) => appointment.patientId === user?.id // Filtra consultas do usuário logado
+        );
+        setAppointments(userAppointments); // Atualiza estado
+      }
+    } catch (error) {
+      console.error('Erro ao carregar consultas:', error); // Log em caso de erro
+    } finally {
+      setLoading(false); // Finaliza carregamento
+    }
   };
 
-  const handleClose = () => {
-    setReason('');
-    onClose();
-  };
-
-  const isCancel = actionType === 'cancel';
+  // Hook que dispara quando a tela ganha foco
+  useFocusEffect(
+    React.useCallback(() => {
+      loadAppointments(); // Carrega consultas
+    }, [])
+  );
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <Overlay>
-        <ModalContainer>
-          <Header>
-            <Title>
-              {isCancel ? 'Cancelar Consulta' : 'Confirmar Consulta'}
-            </Title>
-          </Header>
+    <Container>
+      <Header /> {/* Componente de cabeçalho */}
+      <ScrollView contentContainerStyle={styles.scrollContent}> {/* ScrollView para rolagem */}
+        <Title>Minhas Consultas</Title> {/* Título da tela */}
 
-          <Content>
-            <AppointmentInfo>
-              <InfoRow>
-                <InfoLabel>Paciente:</InfoLabel>
-                <InfoValue>{appointmentDetails.patientName}</InfoValue>
-              </InfoRow>
-              <InfoRow>
-                <InfoLabel>Médico:</InfoLabel>
-                <InfoValue>{appointmentDetails.doctorName}</InfoValue>
-              </InfoRow>
-              <InfoRow>
-                <InfoLabel>Especialidade:</InfoLabel>
-                <InfoValue>{appointmentDetails.specialty}</InfoValue>
-              </InfoRow>
-              <InfoRow>
-                <InfoLabel>Data/Hora:</InfoLabel>
-                <InfoValue>{appointmentDetails.date} às {appointmentDetails.time}</InfoValue>
-              </InfoRow>
-            </AppointmentInfo>
+        {/* Botão para criar nova consulta */}
+        <Button
+          title="Agendar Nova Consulta"
+          onPress={() => navigation.navigate('CreateAppointment')}
+          containerStyle={styles.button as ViewStyle}
+          buttonStyle={styles.buttonStyle}
+        />
 
-            {isCancel && (
-              <ReasonContainer>
-                <Input
-                  label="Motivo do cancelamento (opcional)"
-                  placeholder="Digite o motivo..."
-                  value={reason}
-                  onChangeText={setReason}
-                  multiline
-                  numberOfLines={3}
-                  containerStyle={styles.reasonInput}
-                />
-              </ReasonContainer>
-            )}
+        {/* Botão para acessar perfil */}
+        <Button
+          title="Meu Perfil"
+          onPress={() => navigation.navigate('Profile')}
+          containerStyle={styles.button as ViewStyle}
+          buttonStyle={styles.buttonStyle}
+        />
 
-            <ConfirmationText isCancel={isCancel}>
-              {isCancel 
-                ? 'Tem certeza que deseja cancelar esta consulta?'
-                : 'Tem certeza que deseja confirmar esta consulta?'
-              }
-            </ConfirmationText>
-          </Content>
+        {/* Botão para acessar configurações */}
+        <Button
+          title="Configurações"
+          onPress={() => navigation.navigate('Settings')}
+          containerStyle={styles.button as ViewStyle}
+          buttonStyle={styles.settingsButton}
+        />
 
-          <ButtonContainer>
-            <Button
-              title="Cancelar"
-              onPress={handleClose}
-              containerStyle={styles.cancelButton as ViewStyle}
-              buttonStyle={styles.cancelButtonStyle}
-            />
-            <Button
-              title={isCancel ? 'Confirmar Cancelamento' : 'Confirmar'}
-              onPress={handleConfirm}
-              containerStyle={styles.confirmButton as ViewStyle}
-              buttonStyle={[
-                styles.confirmButtonStyle,
-                { backgroundColor: isCancel ? theme.colors.error : theme.colors.success }
-              ]}
-            />
-          </ButtonContainer>
-        </ModalContainer>
-      </Overlay>
-    </Modal>
+        {/* Condicional de carregamento ou lista de consultas */}
+        {loading ? (
+          <LoadingText>Carregando consultas...</LoadingText> // Mostra loading
+        ) : appointments.length === 0 ? (
+          <EmptyText>Nenhuma consulta agendada</EmptyText> // Mostra mensagem se não há consultas
+        ) : (
+          appointments.map((appointment) => ( // Mapeia e exibe cada consulta
+            <AppointmentCard key={appointment.id}>
+              <ListItem.Content>
+                <ListItem.Title style={styles.patientName as TextStyle}>
+                  Paciente: {appointment.patientName}
+                </ListItem.Title>
+                <ListItem.Subtitle style={styles.dateTime as TextStyle}>
+                  {appointment.date} às {appointment.time}
+                </ListItem.Subtitle>
+                <Text style={styles.doctorName as TextStyle}>
+                  {appointment.doctorName}
+                </Text>
+                <Text style={styles.specialty as TextStyle}>
+                  {appointment.specialty}
+                </Text>
+                <StatusBadge status={appointment.status}>
+                  <StatusText status={appointment.status}>
+                    {getStatusText(appointment.status)}
+                  </StatusText>
+                </StatusBadge>
+              </ListItem.Content>
+            </AppointmentCard>
+          ))
+        )}
+
+        {/* Botão de logout */}
+        <Button
+          title="Sair"
+          onPress={signOut}
+          containerStyle={styles.button as ViewStyle}
+          buttonStyle={styles.logoutButton}
+        />
+      </ScrollView>
+    </Container>
   );
 };
 
+// Estilos de ScrollView e botões
 const styles = {
-  reasonInput: {
-    marginBottom: 10,
+  scrollContent: {
+    padding: 20,
   },
-  cancelButton: {
-    flex: 1,
-    marginRight: 8,
+  button: {
+    marginBottom: 20,
+    width: '100%',
   },
-  confirmButton: {
-    flex: 1,
-    marginLeft: 8,
+  buttonStyle: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 12,
   },
-  cancelButtonStyle: {
+  logoutButton: {
+    backgroundColor: theme.colors.error,
+    paddingVertical: 12,
+  },
+  settingsButton: {
     backgroundColor: theme.colors.secondary,
     paddingVertical: 12,
   },
-  confirmButtonStyle: {
-    paddingVertical: 12,
+  doctorName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  specialty: {
+    fontSize: 14,
+    color: theme.colors.text,
+    marginTop: 4,
+  },
+  dateTime: {
+    fontSize: 14,
+    color: theme.colors.text,
+    marginTop: 4,
+  },
+  patientName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.text,
   },
 };
 
-const Overlay = styled.View`
+// Container principal
+const Container = styled.View`
   flex: 1;
-  background-color: rgba(0, 0, 0, 0.5);
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
+  background-color: ${theme.colors.background};
 `;
 
-const ModalContainer = styled.View`
-  background-color: ${theme.colors.white};
-  border-radius: 12px;
-  width: 100%;
-  max-width: 400px;
-  shadow-color: ${theme.colors.text};
-  shadow-offset: 0px 4px;
-  shadow-opacity: 0.25;
-  shadow-radius: 4px;
-  elevation: 5;
-`;
-
-const Header = styled.View`
-  padding: 20px 20px 10px 20px;
-  border-bottom-width: 1px;
-  border-bottom-color: ${theme.colors.border};
-`;
-
+// Título da tela
 const Title = styled.Text`
-  font-size: 20px;
+  font-size: 24px;
   font-weight: bold;
   color: ${theme.colors.text};
+  margin-bottom: 20px;
   text-align: center;
 `;
 
-const Content = styled.View`
-  padding: 20px;
-`;
-
-const AppointmentInfo = styled.View`
+// Card de cada consulta
+const AppointmentCard = styled(ListItem)`
   background-color: ${theme.colors.background};
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
+  padding: 15px;
+  border-width: 1px;
+  border-color: ${theme.colors.border};
 `;
 
-const InfoRow = styled.View`
-  flex-direction: row;
-  justify-content: space-between;
-  margin-bottom: 8px;
-`;
-
-const InfoLabel = styled.Text`
-  font-size: 14px;
-  color: ${theme.colors.text};
-  font-weight: 500;
-`;
-
-const InfoValue = styled.Text`
-  font-size: 14px;
-  color: ${theme.colors.text};
-  font-weight: 400;
-  flex: 1;
-  text-align: right;
-`;
-
-const ReasonContainer = styled.View`
-  margin-bottom: 16px;
-`;
-
-const ConfirmationText = styled.Text<{ isCancel: boolean }>`
-  font-size: 16px;
-  color: ${(props: { isCancel: boolean }) => props.isCancel ? theme.colors.error : theme.colors.success};
+// Texto de carregamento
+const LoadingText = styled.Text`
   text-align: center;
-  margin-bottom: 20px;
+  color: ${theme.colors.text};
+  font-size: 16px;
+  margin-top: 20px;
+`;
+
+// Texto quando não há consultas
+const EmptyText = styled.Text`
+  text-align: center;
+  color: ${theme.colors.text};
+  font-size: 16px;
+  margin-top: 20px;
+`;
+
+// Badge de status da consulta
+const StatusBadge = styled.View<StyledProps>`
+  background-color: ${(props: StyledProps) => getStatusColor(props.status) + '20'};
+  padding: 4px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+  margin-top: 8px;
+`;
+
+// Texto dentro do badge
+const StatusText = styled.Text<StyledProps>`
+  color: ${(props: StyledProps) => getStatusColor(props.status)};
+  font-size: 12px;
   font-weight: 500;
 `;
 
-const ButtonContainer = styled.View`
-  flex-direction: row;
-  padding: 0 20px 20px 20px;
-`;
-
-export default AppointmentActionModal;
+export default PatientDashboardScreen; // Exporta o componente
